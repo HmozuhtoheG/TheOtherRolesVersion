@@ -33,9 +33,9 @@
       },
       "FilterAPI": {
         "type": "Direct",
-        "requested": "[1.0.2, )",
-        "resolved": "1.0.2",
-        "contentHash": "BCys82/pAbLTU08mZQVWPnB1eJWp0CZfZJzc2PIOLKVFX5fv3MJXj/RScuZFWndB1LGWEizwcCKHGu2YokVgGA=="
+        "requested": "[1.0.1, )",
+        "resolved": "1.0.1",
+        "contentHash": "jWoD6e1h4fLt5M7gSc5hV2YDXUAW2EhrWEJutl2PqWVuYaJWLJHjj//S19RazywIuRdzy6b3KVnYtqxDtxwB0Q=="
       },
       "Reactor": {
         "type": "Direct",
