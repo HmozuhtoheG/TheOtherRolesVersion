@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using BepInEx.Unity.IL2CPP.Utils;
@@ -25,6 +27,7 @@ namespace TheOtherRoles.Modules.CustomHats
             isRunning = true;
             var www = new UnityWebRequest();
             www.SetMethod(UnityWebRequest.UnityWebRequestMethod.Get);
+            www.timeout = 15;
             TheOtherRolesPlugin.Logger.LogMessage($"Download manifest at: {RepositoryUrl}/{ManifestFileName}");
             www.SetUrl($"{RepositoryUrl}/{ManifestFileName}");
             www.downloadHandler = new DownloadHandlerBuffer();
@@ -38,20 +41,44 @@ namespace TheOtherRoles.Modules.CustomHats
             if (www.isNetworkError || www.isHttpError)
             {
                 TheOtherRolesPlugin.Logger.LogError(www.error);
-                yield break;
             }
-
-            var response = JsonSerializer.Deserialize<SkinsConfigFile>(www.downloadHandler.text, new JsonSerializerOptions
+            else
             {
-                AllowTrailingCommas = true
-            });
+                try
+                {
+                    UnregisteredHats.AddRange(ParseManifest(www.downloadHandler.text));
+                }
+                catch (Exception ex)
+                {
+                    TheOtherRolesPlugin.Logger.LogError($"Failed to parse remote manifest: {ex.Message}");
+                }
+            }
             www.downloadHandler.Dispose();
             www.Dispose();
 
             if (!Directory.Exists(HatsDirectory)) Directory.CreateDirectory(HatsDirectory);
 
-            UnregisteredHats.AddRange(SanitizeHats(response));
+            var localManifestPath = Path.Combine(HatsDirectory, ManifestFileName);
+            if (File.Exists(localManifestPath))
+            {
+                TheOtherRolesPlugin.Logger.LogMessage($"Loading local manifest at: {localManifestPath}");
+                try
+                {
+                    var localText = File.ReadAllText(localManifestPath);
+                    foreach (var localHat in ParseManifest(localText))
+                    {
+                        UnregisteredHats.RemoveAll(h => h.Name == localHat.Name);
+                        UnregisteredHats.Add(localHat);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TheOtherRolesPlugin.Logger.LogError($"Failed to load local manifest: {ex.Message}");
+                }
+            }
+
             var toDownload = GenerateDownloadList(UnregisteredHats);
+            UnregisteredHats.AddRange(CustomHatManager.loadBundledHats());
             if (EventUtility.isEnabled) UnregisteredHats.AddRange(CustomHatManager.loadHorseHats());
 
             TheOtherRolesPlugin.Logger.LogMessage($"I'll download {toDownload.Count} hat files");
@@ -66,10 +93,20 @@ namespace TheOtherRoles.Modules.CustomHats
             isRunning = false;
         }
 
+        private static List<CustomHat> ParseManifest(string jsonText)
+        {
+            var response = JsonSerializer.Deserialize<SkinsConfigFile>(jsonText, new JsonSerializerOptions
+            {
+                AllowTrailingCommas = true
+            });
+            return response?.Hats != null ? SanitizeHats(response) : new List<CustomHat>();
+        }
+
         private static IEnumerator CoDownloadHatAsset(string fileName)
         {
             var www = new UnityWebRequest();
             www.SetMethod(UnityWebRequest.UnityWebRequestMethod.Get);
+            www.timeout = 15;
             fileName = fileName.Replace(" ", "%20");
             TheOtherRolesPlugin.Logger.LogMessage($"Downloading {fileName} hat");
             www.SetUrl($"{RepositoryUrl}/hats/{fileName}");

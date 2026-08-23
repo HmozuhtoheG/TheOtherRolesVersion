@@ -27,6 +27,8 @@ namespace TheOtherRoles.Modules.CustomHats
 
         internal static readonly string ManifestFileName = "CustomHats.json";
 
+        private const float HatPixelsPerUnitFactor = 0.65f;
+
 #if WINDOWS
         internal static string CustomSkinsDirectory => Path.Combine(Path.GetDirectoryName(Application.dataPath)!, ResourcesDirectory);
 #else
@@ -132,7 +134,7 @@ namespace TheOtherRoles.Modules.CustomHats
                 var sprite = Sprite.Create(texture,
                     new Rect(0, 0, texture.width, texture.height),
                     new Vector2(0.53f, 0.575f),
-                    texture.width * 0.375f);
+                    texture.width * HatPixelsPerUnitFactor);
                 texture.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontUnloadUnusedAsset;
                 sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontUnloadUnusedAsset;
                 return sprite;
@@ -144,7 +146,7 @@ namespace TheOtherRoles.Modules.CustomHats
             var spriteFromDisk = Sprite.Create(textureFromDisk,
                 new Rect(0, 0, textureFromDisk.width, textureFromDisk.height),
                 new Vector2(0.53f, 0.575f),
-                textureFromDisk.width * 0.375f);
+                textureFromDisk.width * HatPixelsPerUnitFactor);
             if (spriteFromDisk == null) return null;
 
             textureFromDisk.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontUnloadUnusedAsset;
@@ -319,6 +321,47 @@ namespace TheOtherRoles.Modules.CustomHats
                 hatdatas.Add(info);
             }
             return hatdatas;
+        }
+
+        public static List<CustomHat> loadBundledHats()
+        {
+            const string prefix = "TheOtherRoles.Resources.BundledHats.";
+            List<CustomHat> hats = new();
+            Dictionary<string, List<string>> groups = new();
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            foreach (string resourceName in assembly.GetManifestResourceNames())
+            {
+                if (!resourceName.Contains(prefix) || !resourceName.Contains(".png")) continue;
+
+                string baseName = resourceName.Replace(prefix, "").Replace(".png", "");
+                int suffixIndex = baseName.LastIndexOf('_');
+                if (suffixIndex > 0)
+                {
+                    string suffix = baseName[(suffixIndex + 1)..];
+                    if (suffix is "back" or "flip" or "climb" or "adaptive")
+                        baseName = baseName[..suffixIndex];
+                }
+
+                if (!groups.TryGetValue(baseName, out var list))
+                    groups[baseName] = list = new List<string>();
+                list.Add(resourceName);
+            }
+
+            foreach (var group in groups)
+            {
+                CustomHat info = new()
+                {
+                    Name = group.Key.Replace('-', ' '),
+                    Author = "Preinstalled",
+                    Resource = group.Value.FirstOrDefault(x =>
+                        !x.Contains("back") && !x.Contains("flip") && !x.Contains("climb") && !x.Contains("adaptive"))
+                        ?? group.Value.First(),
+                    Adaptive = group.Value.Any(x => x.Contains("adaptive"))
+                };
+                if (info.Resource == null || info.Name == null) continue;
+                hats.Add(info);
+            }
+            return hats;
         }
     }
 }

@@ -133,5 +133,31 @@ namespace TheOtherRoles.Modules.CustomHats
                 return false;
             }
         }
+
+        [HarmonyPatch(typeof(HatParent), nameof(HatParent.LateUpdate))]
+        public static class LateUpdate_Patch
+        {
+            public static bool Prefix(HatParent __instance)
+            {
+                var hat = __instance.Hat;
+                if (hat == null) return true;
+                if (!CustomHatManager.ViewDataCache.ContainsKey(hat.name)) return true;
+                if (__instance.FrontLayer == null) return false;
+
+                bool facingLeft = __instance.shouldFaceLeft;
+                __instance.FrontLayer.flipX = facingLeft;
+                if (__instance.BackLayer != null)
+                    __instance.BackLayer.flipX = facingLeft;
+
+                if (__instance.options.Initialized && __instance.HideHat())
+                {
+                    __instance.FrontLayer.enabled = false;
+                    if (__instance.BackLayer != null)
+                        __instance.BackLayer.enabled = false;
+                }
+
+                return false;
+            }
+        }
     }
 }
