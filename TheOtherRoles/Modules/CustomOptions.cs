@@ -1098,7 +1098,7 @@ namespace TheOtherRoles {
             modeButtonGS = UnityEngine.Object.Instantiate(__instance.modeButtons[0], __instance.modeButtons[0].transform);
             modeButtonGS.name = "TORGUESSER";
             changeButtonText(modeButtonGS, ModTranslation.getString("torGuesser"));
-            modeButtonGS.transform.localPosition = new Vector3(5.8f, 0f, -3f);
+            modeButtonGS.transform.localPosition = new Vector3(0f, -0.75f, -3f);
             modeButtonGS.OnClick.RemoveAllListeners();
             __instance.StartCoroutine(Effects.Lerp(0.1f, new Action<float>(p => modeButtonGS.SelectButton(false))));
             modeButtonGS.OnClick.AddListener((Action)(() =>
@@ -1130,7 +1130,7 @@ namespace TheOtherRoles {
             modeButtonZM = UnityEngine.Object.Instantiate(modeButtonHK, __instance.modeButtons[0].transform);
             modeButtonZM.name = "TORZOMBIE";
             changeButtonText(modeButtonZM, ModTranslation.getString("torZombie"));
-            modeButtonZM.transform.localPosition = new Vector3(8.69f, 0f, -3f);
+            modeButtonZM.transform.localPosition = new Vector3(2.91f, -0.75f, -3f);
             modeButtonZM.OnClick.RemoveAllListeners();
             __instance.StartCoroutine(Effects.Lerp(0.1f, new Action<float>(p => modeButtonZM.SelectButton(false))));
             modeButtonZM.OnClick.AddListener((Action)(() =>

@@ -80,7 +80,7 @@ namespace TheOtherRoles.Modules {
                 }));
 
                 var ZombieButton = GameObject.Instantiate<Transform>(gameButton, gameButton.parent);
-                ZombieButton.transform.localPosition += new Vector3(5.1f, -0.5f);
+                ZombieButton.transform.localPosition += new Vector3(3.4f, 0.0f);
                 var ZombieButtonText = ZombieButton.GetComponentInChildren<TMPro.TextMeshPro>();
                 var ZombieButtonPassiveButton = ZombieButton.GetComponentInChildren<PassiveButton>();
 
