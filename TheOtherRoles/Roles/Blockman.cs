@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using TheOtherRoles.Objects;
@@ -26,6 +26,7 @@ namespace TheOtherRoles.Roles
             ghostBlocks = new();
             mapIndicator = null;
             lastAimDirection = Vector2.right;
+            dashKeyGuideInitialized = false;
         }
 
         public static float maxEnergy = 100f;
@@ -55,6 +56,9 @@ namespace TheOtherRoles.Roles
         private GameObject mapIndicator;
         private bool ghostsVisible = false;
         private Vector2 lastAimDirection = Vector2.right;
+
+        private static bool dashKeyGuideInitialized = false;
+
 
         public class Block
         {
@@ -581,6 +585,20 @@ namespace TheOtherRoles.Roles
 
             if (HudManagerStartPatch.blockmanEnergyText != null)
                 UpdateEnergyText(HudManagerStartPatch.blockmanEnergyText);
+
+            // 参考原版击杀键显示逻辑：游戏内改键后立即同步方块人冲刺按钮的绑定与显示
+            var blockmanKeyboardMap = Rewired.ReInput.mapping.GetKeyboardMapInstanceSavedOrDefault(0, 0, 0);
+            var blockmanKillMaps = blockmanKeyboardMap.GetButtonMapsWithAction(8);
+            if (blockmanKillMaps.Count > 0 && HudManagerStartPatch.blockmanDashButton != null)
+            {
+                var blockmanKillKey = (UnityEngine.KeyCode)blockmanKillMaps[0].keyCode;
+                if (!dashKeyGuideInitialized || HudManagerStartPatch.blockmanDashButton.hotkey != blockmanKillKey)
+                {
+                    HudManagerStartPatch.blockmanDashButton.hotkey = blockmanKillKey;
+                    HudManagerStartPatch.blockmanDashButton.setKeyBind();
+                    dashKeyGuideInitialized = true;
+                }
+            }
         }
 
         private void CheckWinCondition()
