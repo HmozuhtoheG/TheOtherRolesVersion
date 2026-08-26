@@ -3071,6 +3071,12 @@ namespace TheOtherRoles
                abilityTexture: CustomButton.ButtonLabelType.UseButton
             );
 
+            blockmanEnergyText = GameObject.Instantiate(blockmanPlaceButton.actionButton.cooldownTimerText, blockmanPlaceButton.actionButton.cooldownTimerText.transform.parent);
+            blockmanEnergyText.text = "";
+            blockmanEnergyText.enableWordWrapping = false;
+            blockmanEnergyText.transform.localScale = Vector3.one * 0.5f;
+            blockmanEnergyText.transform.localPosition += new Vector3(0.35f, 0.7f, 0);
+
             blockmanDashButton = new CustomButton(
                 () => { Blockman.local.TryDash(); },
                 () => { return PlayerControl.LocalPlayer.isRole(RoleId.Blockman) && !PlayerControl.LocalPlayer.Data.IsDead; },
