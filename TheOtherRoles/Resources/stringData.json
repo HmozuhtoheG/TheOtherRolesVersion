@@ -4001,6 +4001,42 @@
         "13": "TOR\u8bbe\u7f6e",
         "14": "TOR\u8a2d\u5b9a"
     },
+    "gameSettingsTab": {
+        "0": "Game Settings",
+        "11": "\u30b2\u30fc\u30e0\u8a2d\u5b9a",
+        "13": "\u6e38\u620f\u8bbe\u7f6e",
+        "14": "\u904a\u6232\u8a2d\u5b9a"
+    },
+    "gamePresetsTab": {
+        "0": "Game Presets",
+        "11": "\u30b2\u30fc\u30e0\u30d7\u30ea\u30bb\u30c3\u30c8",
+        "13": "\u6e38\u620f\u9884\u8bbe",
+        "14": "\u904a\u6232\u9810\u8a2d"
+    },
+    "roleSettingsTab": {
+        "0": "Role Settings",
+        "11": "\u5f79\u8077\u8a2d\u5b9a",
+        "13": "\u804c\u4e1a\u8bbe\u7f6e",
+        "14": "\u8077\u696d\u8a2d\u5b9a"
+    },
+    "editRoleSettingsHint": {
+        "0": "Edit role settings for the game lobby.",
+        "11": "\u30b2\u30fc\u30e0\u30ed\u30d3\u30fc\u306e\u5f79\u8077\u8a2d\u5b9a\u3092\u7de8\u96c6\u3057\u307e\u3059\u3002",
+        "13": "\u4e3a\u6e38\u620f\u5927\u5385\u7f16\u8f91\u804c\u4e1a\u8bbe\u7f6e\u3002",
+        "14": "\u70ba\u904a\u6232\u5927\u5ef3\u7de8\u8f2f\u8077\u696d\u8a2d\u5b9a\u3002"
+    },
+    "roleCountColumn": {
+        "0": "Role Count",
+        "11": "\u5f79\u8077\u6570",
+        "13": "\u89d2\u8272\u6570\u91cf",
+        "14": "\u89d2\u8272\u6578\u91cf"
+    },
+    "chanceColumn": {
+        "0": "Chance %",
+        "11": "\u78ba\u7387%",
+        "13": "\u51e0\u7387%",
+        "14": "\u6a5f\u7387%"
+    },
     "guesserNewSettings": {
         "0": "Guesser Settings",
         "11": "\u30b2\u30c3\u30b5\u30fc\u306e\u8a2d\u5b9a",

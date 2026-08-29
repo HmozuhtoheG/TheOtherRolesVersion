@@ -10,6 +10,7 @@ using HarmonyLib;
 using Hazel;
 using Il2CppSystem.Linq;
 using Reactor.Utilities.Extensions;
+using TheOtherRoles.MetaContext;
 using TheOtherRoles.Modules;
 using TheOtherRoles.Roles;
 using TheOtherRoles.Utilities;
@@ -483,22 +484,26 @@ namespace TheOtherRoles {
                 if (tab != null)
                     tab.SetActive(false);
             }
-            foreach (var pbutton in GameOptionsMenuStartPatch.currentButtons)
-            {
-                pbutton.SelectButton(false);
-            }
             if (tabNum > 2)
             {
                 tabNum -= 3;
                 GameOptionsMenuStartPatch.activeTabIndex = tabNum;
                 GameOptionsMenuStartPatch.RebuildTabIfDirty(tabNum);
-                GameOptionsMenuStartPatch.currentTabs[tabNum].SetActive(true);
-                GameOptionsMenuStartPatch.currentButtons[tabNum].SelectButton(true);
+                if (tabNum < GameOptionsMenuStartPatch.currentTabs.Count)
+                    GameOptionsMenuStartPatch.currentTabs[tabNum].SetActive(true);
+                // 进入 TOR 设置页（阵营/General）→ 显示顶部标签栏
+                if (GameOptionsMenuStartPatch.headerTabBarObject != null)
+                    GameOptionsMenuStartPatch.headerTabBarObject.SetActive(true);
             }
             else
             {
                 GameOptionsMenuStartPatch.activeTabIndex = -1;
+                // 切回原版（游戏设置：地图/人数/模式）→ 隐藏顶部标签栏
+                if (GameOptionsMenuStartPatch.headerTabBarObject != null)
+                    GameOptionsMenuStartPatch.headerTabBarObject.SetActive(false);
             }
+            // 同步顶部标签栏高亮
+            GameOptionsMenuStartPatch.UpdateHeaderTabHighlight(GameOptionsMenuStartPatch.activeTabIndex);
         }
     }
 
@@ -559,6 +564,7 @@ namespace TheOtherRoles {
     class LobbyViewSettingsPatch
     {
         public static List<PassiveButton> currentButtons = new();
+        public static List<int> currentButtonTargets = new();
         public static List<CustomOptionType> currentButtonTypes = new();
         public static bool gameModeChangedFlag = false;
         private const float RowSlideOffset = 0.18f;
@@ -919,7 +925,6 @@ namespace TheOtherRoles {
 
             if (MyPicker.MaxPlayersRoot)
             {
-                //以前のボタンを削除する
                 MyPicker.optionsMenu.ControllerSelectable.Clear();
                 MyPicker.MaxPlayerButtons.Clear();
 
@@ -943,7 +948,6 @@ namespace TheOtherRoles {
             subMenu.transform.localPosition = new(1.11f, isCustomServer ? -0.4f : 0f, 0f);
             subMenu.GetComponent<ShiftButtonsCrossplayEnabled>().enabled = false;
 
-            //4人以上のオプションはカスタムサーバーのみ使用可能
             for (int i = 4; i <= 6; i++) MyPicker.ImpostorButtons[i - 1].gameObject.SetActive(isCustomServer);
 
             var options = MyPicker.GetTargetOptions();
@@ -1000,7 +1004,6 @@ namespace TheOtherRoles {
             NormalGameOptionsV08.MinPlayers = minPlayers;
             NormalGameOptionsV07.MinPlayers = minPlayers;
 
-            //ゲームモードはノーマル固定
             DataManager.Settings.Multiplayer.LastPlayedGameMode = AmongUs.GameOptions.GameModes.Normal;
             DataManager.Settings.Save();
             GameOptionsManager.Instance.SwitchGameMode(AmongUs.GameOptions.GameModes.Normal);
@@ -1207,10 +1210,18 @@ namespace TheOtherRoles {
     {
         public static List<GameObject> currentTabs = new();
         public static List<PassiveButton> currentButtons = new();
+        public static List<int> currentButtonTargets = new();
         public static Dictionary<byte, GameOptionsMenu> currentGOMs = new();
         public static List<CustomOptionType> currentTabTypes = new();
         public static List<bool> currentTabsDirty = new();
         public static int activeTabIndex = -1;
+        public static List<PassiveButton> headerTabButtons = new();
+        public static List<SpriteRenderer> headerTabIcons = new();
+        public static GameObject headerTabBarObject = null;      // 顶部标签栏根对象（用于显隐）
+        public static List<int> headerTabTargets = new();         // 顶部标签栏所有标签的 targetMenu（含 General + 各阵营）
+        public static List<int> roleTabTargets = new();           // 「角色设置」对应的阵营 targetMenu（不含 General）
+        public static int generalTabTarget = 3;                   // TOR General「游戏设置」标签的 targetMenu
+        public static List<GameObject> headerTabFrames = new();   // 每个标签的圆角矩形边框（用于高亮着色）
 
         public static void Postfix(GameSettingMenu __instance)
         {
@@ -1218,16 +1229,36 @@ namespace TheOtherRoles {
             currentButtons.ForEach(x => { if (x != null) x?.Destroy(); });
             currentTabs = new();
             currentButtons = new();
+            currentButtonTargets = new();
             currentGOMs.Clear();
             currentTabTypes = new();
             currentTabsDirty = new();
             activeTabIndex = -1;
+            headerTabButtons.ForEach(x => { if (x != null) x?.Destroy(); });
+            headerTabButtons = new();
+            headerTabIcons = new();
+            headerTabBarObject = null;
+            headerTabTargets = new();
+            roleTabTargets = new();
+            headerTabFrames = new();
+            generalTabTarget = 3;
 
             if (GameOptionsManager.Instance.currentGameOptions.GameMode == GameModes.HideNSeek) return;
 
             removeVanillaTabs(__instance);
 
             createSettingTabs(__instance);
+
+            createHeaderTabBar(__instance);
+
+            buildLeftNavigation(__instance);
+
+            // 默认进入「角色设置」：显示顶部标签栏并切换到顶栏第一个标签（General/游戏设置）
+            if (headerTabTargets.Count > 0)
+            {
+                headerTabBarObject?.SetActive(true);
+                __instance.ChangeTab(headerTabTargets[0], false);
+            }
 
             var GOMGameObject = GameObject.Find("GAME SETTINGS TAB");
 
@@ -1385,7 +1416,16 @@ namespace TheOtherRoles {
                 torSettingsPassiveButton.OnMouseOver.RemoveAllListeners();
                 torSettingsPassiveButton.SelectButton(false);
                 currentButtons.Add(torSettingsPassiveButton);
+                currentButtonTargets.Add(targetMenu);
             }
+        }
+
+        private static void buildLeftNavigation(GameSettingMenu __instance)
+        {
+            // 标题 + 说明卡片（放在左栏左上角，位于按钮上方）
+            var leftPanel = GameObject.Find("LeftPanel");
+            if (leftPanel == null) return;
+            TOROptionsUI.BuildLeftHeader(leftPanel.transform, new Vector3(0f, 1.9f, -2f));
         }
 
         public static void createGameOptionsMenu(GameSettingMenu __instance, CustomOptionType optionType, string settingName)
@@ -1444,49 +1484,204 @@ namespace TheOtherRoles {
 
         private static void createSettingTabs(GameSettingMenu __instance)
         {
-            // Handle different gamemodes and tabs needed therein.
+            // 先创建所有 tab（右侧详情页）；其顺序决定 targetMenu(索引+3)。
+            // 左侧只保留「游戏设置(原版) / 角色设置」；TOR 各设置页（General + 阵营）全部进入顶部标签栏。
             int next = 3;
+            headerTabTargets = new();
+            roleTabTargets = new();
             if (TORMapOptions.gameMode == CustomGamemodes.Guesser || TORMapOptions.gameMode == CustomGamemodes.Classic || TORMapOptions.gameMode == CustomGamemodes.FreePlay)
             {
-
-                // create TOR settings
-                createCustomButton(__instance, next++, "TORSettings", ModTranslation.getString("torNewSettings"));
                 createGameOptionsMenu(__instance, CustomOptionType.General, "TORSettings");
-                // Guesser if applicable
+                headerTabTargets.Add(next++); // General == 3
+
                 if (TORMapOptions.gameMode == CustomGamemodes.Guesser)
                 {
-                    createCustomButton(__instance, next++, "GuesserSettings", ModTranslation.getString("guesserNewSettings"));
                     createGameOptionsMenu(__instance, CustomOptionType.Guesser, "GuesserSettings");
+                    headerTabTargets.Add(next++); // Guesser == 4
                 }
-                // IMp
-                createCustomButton(__instance, next++, "ImpostorSettings", ModTranslation.getString("impostorRoles"));
+
                 createGameOptionsMenu(__instance, CustomOptionType.Impostor, "ImpostorSettings");
-
-                // Neutral
-                createCustomButton(__instance, next++, "NeutralSettings", ModTranslation.getString("neutralRoles"));
+                headerTabTargets.Add(next); roleTabTargets.Add(next++); // Impostor
                 createGameOptionsMenu(__instance, CustomOptionType.Neutral, "NeutralSettings");
-                // Crew
-                createCustomButton(__instance, next++, "CrewmateSettings", ModTranslation.getString("crewmateRoles"));
+                headerTabTargets.Add(next); roleTabTargets.Add(next++); // Neutral
                 createGameOptionsMenu(__instance, CustomOptionType.Crewmate, "CrewmateSettings");
-                // Modifier
-                createCustomButton(__instance, next++, "ModifierSettings", ModTranslation.getString("modifiers"));
+                headerTabTargets.Add(next); roleTabTargets.Add(next++); // Crewmate
                 createGameOptionsMenu(__instance, CustomOptionType.Modifier, "ModifierSettings");
-
+                headerTabTargets.Add(next); roleTabTargets.Add(next++); // Modifier
             }
             else if (TORMapOptions.gameMode == CustomGamemodes.HideNSeek)
             {
-                // create Main HNS settings
-                createCustomButton(__instance, next++, "HideNSeekMain", ModTranslation.getString("hideNSeekMain"));
                 createGameOptionsMenu(__instance, CustomOptionType.HideNSeekMain, "HideNSeekMain");
-                // create HNS Role settings
-                createCustomButton(__instance, next++, "HideNSeekRoles", ModTranslation.getString("hideNSeekRoles"));
+                headerTabTargets.Add(next++); // Main == 3
                 createGameOptionsMenu(__instance, CustomOptionType.HideNSeekRoles, "HideNSeekRoles");
+                headerTabTargets.Add(next); roleTabTargets.Add(next++); // Roles == 4
             }
             else if (TORMapOptions.gameMode == CustomGamemodes.Zombie)
             {
-                // create Zombie settings
-                createCustomButton(__instance, next++, "ZombieMain", ModTranslation.getString("zombieMain"));
                 createGameOptionsMenu(__instance, CustomOptionType.ZombieMain, "ZombieMain");
+                headerTabTargets.Add(next++); // Main == 3
+            }
+
+            generalTabTarget = 3;
+
+            // 左侧「游戏设置」保持原版按钮（地图/人数/模式），仅替换显示文本；不改动点击。
+            var vanillaGameBtn = GameObject.Find("GameSettingsButton");
+            vanillaGameBtn.transform.localPosition += Vector3.up * 0.3f;
+            if (vanillaGameBtn != null)
+            {
+                __instance.StartCoroutine(Effects.Lerp(2f, new Action<float>(p =>
+                {
+                    var tmp = vanillaGameBtn.transform.FindChild("FontPlacer")?.GetComponentInChildren<TextMeshPro>();
+                    if (tmp != null)
+                    {
+                        tmp.GetComponent<TextTranslatorTMP>()?.Destroy();
+                        tmp.text = ModTranslation.getString("gameSettingsTab");
+                    }
+                })));
+            }
+
+            int roleTarget = headerTabTargets.Count > 0 ? headerTabTargets[0] : generalTabTarget;
+            createNavButton(__instance, roleTarget, "TOR-RoleSettings", ModTranslation.getString("roleSettingsTab"));
+        }
+        /// 创建左侧「角色设置」导航按钮（实例化自原生模板，上移放置）。
+        /// 点击后切换到第一个阵营 tab 并显示顶部标签栏。
+
+        private static void createNavButton(GameSettingMenu __instance, int targetMenu, string buttonName, string buttonText)
+        {
+            var leftPanel = GameObject.Find("LeftPanel");
+            var buttonTemplate = GameObject.Find("GameSettingsButton");
+            if (leftPanel == null || buttonTemplate == null) return;
+
+            if (GameObject.Find(buttonName) != null) return;
+
+            var navButton = GameObject.Instantiate(buttonTemplate, leftPanel.transform);
+            navButton.name = buttonName;
+            navButton.transform.localPosition += Vector3.up * 1f; // 上移，紧邻「游戏设置」按钮
+
+            __instance.StartCoroutine(Effects.Lerp(2f, new Action<float>(p =>
+            {
+                var tmp = navButton.transform.FindChild("FontPlacer")?.GetComponentInChildren<TextMeshPro>();
+                if (tmp != null)
+                {
+                    tmp.GetComponent<TextTranslatorTMP>()?.Destroy();
+                    tmp.text = buttonText;
+                }
+            })));
+            var passiveButton = navButton.GetComponent<PassiveButton>();
+            passiveButton.OnClick.RemoveAllListeners();
+            passiveButton.OnClick.AddListener((System.Action)(() =>
+            {
+                __instance.ChangeTab(targetMenu, false); // ChangeTab 内会据 tabNum 显隐顶栏
+            }));
+            passiveButton.OnMouseOut.RemoveAllListeners();
+            passiveButton.OnMouseOver.RemoveAllListeners();
+            passiveButton.SelectButton(false);
+        }
+
+        private static string GetTabIconResource(CustomOptionType type)
+        {
+            switch (type)
+            {
+                case CustomOptionType.Impostor: return "TheOtherRoles.Resources.TabIconImpostor.png";
+                case CustomOptionType.Neutral: return "TheOtherRoles.Resources.TabIconNeutral.png";
+                case CustomOptionType.Crewmate: return "TheOtherRoles.Resources.TabIconCrewmate.png";
+                case CustomOptionType.Modifier: return "TheOtherRoles.Resources.TabIconModifier.png";
+                case CustomOptionType.Guesser: return "TheOtherRoles.Resources.TabIconGuesserSettings.png";
+                case CustomOptionType.HideNSeekMain:
+                case CustomOptionType.HideNSeekRoles: return "TheOtherRoles.Resources.TabIconHideNSeekSettings.png";
+                // General/游戏设置：用通用 TabIcon
+                default: return "TheOtherRoles.Resources.TabIcon.png";
+            }
+        }
+
+        private static void createHeaderTabBar(GameSettingMenu __instance)
+        {
+            if (headerTabTargets.Count == 0) return;
+
+            int uiLayer = LayerMask.NameToLayer("UI");
+            float barX = -0.05f;
+            if (TORMapOptions.gameMode == CustomGamemodes.Guesser) barX += 0.45f;
+            if (TORMapOptions.gameMode == CustomGamemodes.HideNSeek) barX -= 1f;
+            var bar = Helpers.CreateObject("TORHeaderTabBar", __instance.transform, new Vector3(barX, 2.25f, -2f), uiLayer);
+            headerTabBarObject = bar;
+
+            int count = headerTabTargets.Count;
+            float startX = -(count - 1) * 0.7f / 2f;
+
+            for (int i = 0; i < count; i++)
+            {
+                int targetMenu = headerTabTargets[i];
+                int tabIndex = targetMenu - 3; // targetMenu == 索引 + 3
+
+                CustomOptionType type;
+                if (tabIndex >= 0 && tabIndex < currentTabTypes.Count)
+                    type = currentTabTypes[tabIndex];
+                else
+                    type = CustomOptionType.General;
+
+                var sprite = Helpers.loadSpriteFromResources(GetTabIconResource(type), 175f);
+                if (sprite == null) sprite = Helpers.loadSpriteFromResources("TheOtherRoles.Resources.TabIcon.png", 175f);
+
+                float x = startX + i * 0.7f;
+                var tab = Helpers.CreateObject("HeaderTab_" + type, bar.transform, new Vector3(x, 0f, -0.1f), uiLayer);
+
+                // 圆角矩形边框（外层，选中天蓝 / 未选白）
+                var frame = Helpers.CreateObject<SpriteRenderer>("Frame", tab.transform, new Vector3(0f, 0f, 0f), uiLayer);
+                frame.sprite = VanillaAsset.TextButtonSprite;
+                frame.drawMode = SpriteDrawMode.Sliced;
+                frame.tileMode = SpriteTileMode.Continuous;
+                frame.size = new Vector2(0.62f, 0.65f);
+                frame.color = Color.white;
+                frame.sortingOrder = 11;
+                headerTabFrames.Add(frame.gameObject);
+
+                // 圆角矩形内底（深色，形成描边效果）
+                var inner = Helpers.CreateObject<SpriteRenderer>("Inner", tab.transform, new Vector3(0f, 0f, -0.05f), uiLayer);
+                inner.sprite = VanillaAsset.TextButtonSprite;
+                inner.drawMode = SpriteDrawMode.Sliced;
+                inner.tileMode = SpriteTileMode.Continuous;
+                inner.size = new Vector2(0.54f, 0.52f);
+                inner.color = new Color(0.12f, 0.13f, 0.16f, 1f);
+                inner.sortingOrder = 11;
+
+                // 保留阵营图标（叠在圆角框内部）
+                var icon = Helpers.CreateObject<SpriteRenderer>("Icon", tab.transform, new Vector3(0f, 0f, -0.1f), uiLayer);
+                icon.sprite = sprite;
+                icon.transform.localScale = new Vector3(0.52f, 0.52f, 1f);
+                icon.sortingOrder = 12;
+                headerTabIcons.Add(icon);
+
+                var collider = tab.AddComponent<BoxCollider2D>();
+                collider.size = new Vector2(0.62f, 0.56f);
+                collider.isTrigger = true;
+
+                // 不传 buttonRenderer：避免 OnMouseOut 把选中标签的天蓝边框重置为白。
+                // 边框颜色仅由 UpdateHeaderTabHighlight 按「当前页」维护。
+                var button = tab.SetUpButton(false, null);
+                button.OnClick.AddListener((System.Action)(() => {
+                    __instance.ChangeTab(targetMenu, false);
+                }));
+                headerTabButtons.Add(button);
+            }
+
+            UpdateHeaderTabHighlight(activeTabIndex);
+        }
+
+        /// <summary>
+        /// 根据当前 activeTabIndex（tab 索引）给顶部标签栏圆角边框着色：选中天蓝、其余白。
+        /// </summary>
+        public static void UpdateHeaderTabHighlight(int selectedTabIndex)
+        {
+            int selectedTarget = selectedTabIndex + 3; // 转回 targetMenu
+            Color skyBlue = new Color(0.35f, 0.75f, 0.95f, 1f);
+            for (int i = 0; i < headerTabFrames.Count; i++)
+            {
+                var frame = headerTabFrames[i];
+                if (frame == null) continue;
+                var sr = frame.GetComponent<SpriteRenderer>();
+                if (sr == null) continue;
+                bool active = i < headerTabTargets.Count && headerTabTargets[i] == selectedTarget;
+                sr.color = active ? skyBlue : Color.white;
             }
         }
     }
